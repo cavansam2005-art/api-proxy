@@ -6,7 +6,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Lưu trữ Key bằng RAM (Tránh hoàn toàn lỗi thư viện trên Render)
+// Lưu trữ Key tạm thời trên RAM để tránh lỗi thư viện trên Render
 const dbKeys = {};
 
 function generateKey() {
@@ -16,7 +16,7 @@ function generateKey() {
 }
 
 // ==========================================
-// API CHO GIAO DIỆN
+// API XỬ LÝ GIAO DIỆN
 // ==========================================
 app.post('/', (req, res) => {
   const { action, key_code, browser_uuid, file_name, mod_type, client_ip } = req.body;
