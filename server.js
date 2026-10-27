@@ -1,28 +1,13 @@
 const express = require('express');
 const cors = require('cors');
-const { DatabaseSync } = require('node:sqlite'); // Thư viện có sẵn của Node 22+
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Khởi tạo Database
-const db = new DatabaseSync('db.sqlite');
-db.exec(`
-  CREATE TABLE IF NOT EXISTS keys (
-    key_code TEXT PRIMARY KEY,
-    ip TEXT,
-    device_id TEXT,
-    expires_at INTEGER,
-    activated_at INTEGER,
-    created_at INTEGER,
-    mod_name TEXT,
-    file_name TEXT,
-    server_host TEXT,
-    server_port INTEGER
-  )
-`);
+// Lưu trữ Key bằng RAM (Tránh hoàn toàn lỗi thư viện trên Render)
+const dbKeys = {};
 
 function generateKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -31,7 +16,7 @@ function generateKey() {
 }
 
 // ==========================================
-// API XỬ LÝ GIAO DIỆN
+// API CHO GIAO DIỆN
 // ==========================================
 app.post('/', (req, res) => {
   const { action, key_code, browser_uuid, file_name, mod_type, client_ip } = req.body;
@@ -49,7 +34,7 @@ app.post('/', (req, res) => {
   }
 
   if (action === 'check_key') {
-    const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
+    const record = dbKeys[key_code];
     if (!record) return res.json({ status: 'error', message: 'Key không tồn tại.' });
     
     const now = Math.floor(Date.now() / 1000);
@@ -66,7 +51,7 @@ app.post('/', (req, res) => {
   }
 
   if (action === 'add_ip') {
-    const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
+    const record = dbKeys[key_code];
     if (!record) return res.json({ status: 'error', message: 'Key không tồn tại.' });
 
     let server = 'dhieushop.click';
@@ -75,20 +60,28 @@ app.post('/', (req, res) => {
     if (file_name === 'aim_neck_dragon2.txt') port = 7778;
     if (file_name === 'aim_magic_bullet.txt') port = 7779;
 
-    const now = Math.floor(Date.now() / 1000);
-    db.prepare('UPDATE keys SET ip = ?, device_id = ?, activated_at = ?, mod_name = ?, file_name = ?, server_host = ?, server_port = ? WHERE key_code = ?')
-      .run(client_ip, browser_uuid, now, mod_type, file_name, server, port, key_code);
+    record.ip = client_ip;
+    record.device_id = browser_uuid;
+    record.activated_at = Math.floor(Date.now() / 1000);
+    record.mod_name = mod_type;
+    record.file_name = file_name;
+    record.server_host = server;
+    record.server_port = port;
 
     return res.json({ status: 'success', expires_at: record.expires_at, server: server, port: port });
   }
 
   if (action === 'remove_ip') {
-    db.prepare('UPDATE keys SET ip = NULL, mod_name = NULL, file_name = NULL WHERE key_code = ?').run(key_code);
+    if (dbKeys[key_code]) {
+      dbKeys[key_code].ip = null;
+      dbKeys[key_code].mod_name = null;
+      dbKeys[key_code].file_name = null;
+    }
     return res.json({ status: 'success' });
   }
 
   if (action === 'check_status') {
-    const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
+    const record = dbKeys[key_code];
     if (!record || !record.ip) return res.json({ status: 'success', active: false });
     const now = Math.floor(Date.now() / 1000);
     if (record.expires_at && now > record.expires_at) return res.json({ status: 'success', active: false, expired: true });
@@ -100,9 +93,6 @@ app.post('/', (req, res) => {
   }
 });
 
-// ==========================================
-// API LẤY IP
-// ==========================================
 app.get('/api/whoami', (req, res) => {
   let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
@@ -190,13 +180,30 @@ app.get('/admin', (req, res) => {
   `);
 });
 
-app.get('/api/admin/list', (req, res) => res.json(db.prepare('SELECT * FROM keys ORDER BY created_at DESC').all()));
+app.get('/api/admin/list', (req, res) => {
+  const list = Object.keys(dbKeys).map(k => ({ key_code: k, ...dbKeys[k] }));
+  list.sort((a, b) => b.created_at - a.created_at);
+  res.json(list);
+});
+
 app.get('/api/admin/genkey', (req, res) => {
   const days = parseInt(req.query.days) || 0; const hours = parseInt(req.query.hours) || 0;
   const now = Math.floor(Date.now() / 1000); const total = (days*24*60*60)+(hours*60*60);
   const exp = total > 0 ? now + total : null;
   const newKey = generateKey();
-  db.prepare('INSERT INTO keys (key_code, expires_at, created_at) VALUES (?, ?, ?)').run(newKey, exp, now);
+  
+  dbKeys[newKey] = {
+    expires_at: exp,
+    activated_at: null,
+    created_at: now,
+    ip: null,
+    device_id: null,
+    mod_name: null,
+    file_name: null,
+    server_host: null,
+    server_port: null
+  };
+  
   res.json({ ok: true, key: newKey });
 });
 
