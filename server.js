@@ -1,13 +1,14 @@
 const express = require('express');
 const cors = require('cors');
-const Database = require('better-sqlite3');
+const { DatabaseSync } = require('node:sqlite'); // Thư viện có sẵn của Node 22+
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const db = new Database('db.sqlite');
+// Khởi tạo Database
+const db = new DatabaseSync('db.sqlite');
 db.exec(`
   CREATE TABLE IF NOT EXISTS keys (
     key_code TEXT PRIMARY KEY,
@@ -30,7 +31,7 @@ function generateKey() {
 }
 
 // ==========================================
-// API XỬ LÝ GIAO DIỆN (GỘP CHUNG 1 CHỖ DUY NHẤT)
+// API XỬ LÝ GIAO DIỆN
 // ==========================================
 app.post('/', (req, res) => {
   const { action, key_code, browser_uuid, file_name, mod_type, client_ip } = req.body;
