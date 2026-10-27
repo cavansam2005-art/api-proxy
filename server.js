@@ -5,7 +5,7 @@ const Database = require('better-sqlite3');
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // Quan trọng để đọc FormData từ HTML
+app.use(express.urlencoded({ extended: true })); // Đọc FormData từ HTML
 
 // 1. Khởi tạo Database
 const db = new Database('db.sqlite');
@@ -32,7 +32,7 @@ function generateKey() {
 }
 
 // ==========================================
-// API CHO GIAO DIỆN (Xử lý FormData)
+// API DÀNH CHO GIAO DIỆN ZENITH (FormData)
 // ==========================================
 
 // Lấy danh sách Module
@@ -111,7 +111,7 @@ app.post('/', (req, res) => {
 
 // Check Status
 app.post('/', (req, res) => {
-  const { action, key_code, browser_uuid } = req.body;
+  const { action, key_code } = req.body;
   if (action === 'check_status') {
     const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
     if (!record || !record.ip) return res.json({ status: 'success', active: false });
