@@ -7,7 +7,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 1. Khởi tạo Database
 const db = new Database('db.sqlite');
 db.exec(`
   CREATE TABLE IF NOT EXISTS keys (
@@ -24,7 +23,6 @@ db.exec(`
   )
 `);
 
-// 2. Hàm tạo Key
 function generateKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const part = () => Array.from({length: 4}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
@@ -32,7 +30,7 @@ function generateKey() {
 }
 
 // ==========================================
-// API CHO GIAO DIỆN (Xử lý FormData gộp chung 1 chỗ)
+// API XỬ LÝ GIAO DIỆN (GỘP CHUNG 1 CHỖ DUY NHẤT)
 // ==========================================
 app.post('/', (req, res) => {
   const { action, key_code, browser_uuid, file_name, mod_type, client_ip } = req.body;
@@ -70,7 +68,8 @@ app.post('/', (req, res) => {
     const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
     if (!record) return res.json({ status: 'error', message: 'Key không tồn tại.' });
 
-    let server = 'dhieushop.click', port = 7776;
+    let server = 'dhieushop.click';
+    let port = 7776;
     if (file_name === 'aim_chest.txt') port = 7777;
     if (file_name === 'aim_neck_dragon2.txt') port = 7778;
     if (file_name === 'aim_magic_bullet.txt') port = 7779;
@@ -92,6 +91,7 @@ app.post('/', (req, res) => {
     if (!record || !record.ip) return res.json({ status: 'success', active: false });
     const now = Math.floor(Date.now() / 1000);
     if (record.expires_at && now > record.expires_at) return res.json({ status: 'success', active: false, expired: true });
+    
     return res.json({
       status: 'success', active: true,
       data: { mod: record.mod_name, file: record.file_name, server: record.server_host, port: record.server_port, expires_at: record.expires_at }
@@ -110,7 +110,7 @@ app.get('/api/whoami', (req, res) => {
 });
 
 // ==========================================
-// TRANG ADMIN QUẢN LÝ
+// TRANG ADMIN
 // ==========================================
 app.get('/admin', (req, res) => {
   res.send(`
