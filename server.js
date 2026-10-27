@@ -5,7 +5,7 @@ const Database = require('better-sqlite3');
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // Đọc FormData từ HTML
+app.use(express.urlencoded({ extended: true }));
 
 // 1. Khởi tạo Database
 const db = new Database('db.sqlite');
@@ -32,12 +32,11 @@ function generateKey() {
 }
 
 // ==========================================
-// API DÀNH CHO GIAO DIỆN ZENITH (FormData)
+// API CHO GIAO DIỆN (Xử lý FormData gộp chung 1 chỗ)
 // ==========================================
-
-// Lấy danh sách Module
 app.post('/', (req, res) => {
-  const { action } = req.body;
+  const { action, key_code, browser_uuid, file_name, mod_type, client_ip } = req.body;
+
   if (action === 'get_aims') {
     return res.json({
       status: 'success',
@@ -49,11 +48,7 @@ app.post('/', (req, res) => {
       ]
     });
   }
-});
 
-// Check Key
-app.post('/', (req, res) => {
-  const { action, key_code, browser_uuid } = req.body;
   if (action === 'check_key') {
     const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
     if (!record) return res.json({ status: 'error', message: 'Key không tồn tại.' });
@@ -64,25 +59,18 @@ app.post('/', (req, res) => {
 
     if (record.ip) {
       return res.json({
-        status: 'success',
-        activated: true,
-        expires_at: record.expires_at,
+        status: 'success', activated: true, expires_at: record.expires_at,
         activation_data: { mod: record.mod_name, file: record.file_name, server: record.server_host, port: record.server_port }
       });
     }
     return res.json({ status: 'success', activated: false, expires_at: record.expires_at });
   }
-});
 
-// Active / Add IP
-app.post('/', (req, res) => {
-  const { action, key_code, file_name, mod_type, browser_uuid, client_ip } = req.body;
   if (action === 'add_ip') {
     const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
     if (!record) return res.json({ status: 'error', message: 'Key không tồn tại.' });
 
-    let server = 'dhieushop.click';
-    let port = 7776;
+    let server = 'dhieushop.click', port = 7776;
     if (file_name === 'aim_chest.txt') port = 7777;
     if (file_name === 'aim_neck_dragon2.txt') port = 7778;
     if (file_name === 'aim_magic_bullet.txt') port = 7779;
@@ -91,44 +79,22 @@ app.post('/', (req, res) => {
     db.prepare('UPDATE keys SET ip = ?, device_id = ?, activated_at = ?, mod_name = ?, file_name = ?, server_host = ?, server_port = ? WHERE key_code = ?')
       .run(client_ip, browser_uuid, now, mod_type, file_name, server, port, key_code);
 
-    return res.json({
-      status: 'success',
-      expires_at: record.expires_at,
-      server: server,
-      port: port
-    });
+    return res.json({ status: 'success', expires_at: record.expires_at, server: server, port: port });
   }
-});
 
-// Deactivate / Remove IP
-app.post('/', (req, res) => {
-  const { action, key_code } = req.body;
   if (action === 'remove_ip') {
     db.prepare('UPDATE keys SET ip = NULL, mod_name = NULL, file_name = NULL WHERE key_code = ?').run(key_code);
     return res.json({ status: 'success' });
   }
-});
 
-// Check Status
-app.post('/', (req, res) => {
-  const { action, key_code } = req.body;
   if (action === 'check_status') {
     const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
     if (!record || !record.ip) return res.json({ status: 'success', active: false });
-
     const now = Math.floor(Date.now() / 1000);
     if (record.expires_at && now > record.expires_at) return res.json({ status: 'success', active: false, expired: true });
-
     return res.json({
-      status: 'success',
-      active: true,
-      data: {
-        mod: record.mod_name,
-        file: record.file_name,
-        server: record.server_host,
-        port: record.server_port,
-        expires_at: record.expires_at
-      }
+      status: 'success', active: true,
+      data: { mod: record.mod_name, file: record.file_name, server: record.server_host, port: record.server_port, expires_at: record.expires_at }
     });
   }
 });
