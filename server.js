@@ -1,32 +1,10 @@
 const express = require('express');
 const cors = require('cors');
-
 const app = express();
+
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-const dbKeys = {};
-
-function generateKey() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const part = () => Array.from({length: 4}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
-  return `KEY-${part()}-${part()}-${part()}`;
-}
-
-// Giả lập danh sách Aim & VIP
-const aimList = [
-  { id: 'aim_1', name: 'Aim Drag On 2.0', label: 'Aim Drag On 2.0', is_active: false },
-  { id: 'aim_2', name: 'Aim Chest', label: 'Aim Chest', is_active: false },
-  { id: 'aim_3', name: 'Aim Neck', label: 'Aim Neck', is_active: false }
-];
-
-const vipGamevars = [
-  { id: 'vip_1', name: 'Magic Bullet', is_active: false },
-  { id: 'vip_2', name: 'Speed Hack', is_active: false }
-];
-
-// API Lấy IP
 app.get('/whoami', (req, res) => {
   let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
@@ -34,187 +12,12 @@ app.get('/whoami', (req, res) => {
   res.json({ ip: ip || "127.0.0.1" });
 });
 
-// API Kích hoạt (Submit)
 app.post('/submit', (req, res) => {
-  const { key, ip, device_id } = req.body;
-  if (!dbKeys[key]) return res.status(404).json({ message: 'Key không tồn tại.' });
-
-  const record = dbKeys[key];
-  const now = Math.floor(Date.now() / 1000);
-  if (record.expires_at && now > record.expires_at) return res.status(403).json({ message: 'Key đã hết hạn.' });
-
-  record.ip = ip;
-  record.device_id = device_id;
-  record.activated_at = now;
-
-  res.json({
-    message: 'Kích hoạt thành công!',
-    expires_at: record.expires_at,
-    duration: '30 ngày',
-    aims: aimList,
-    vip_gamevars: vipGamevars,
-    active_vip_gamevar_id: null
-  });
+  res.json({ message: 'Kích hoạt thành công!', expires_at: Math.floor(Date.now()/1000) + 86400, duration: '1 Ngày', aims: [], vip_gamevars: [] });
 });
 
-// API Tra cứu Key (Status)
-app.get('/api/key-status', (req, res) => {
-  const key = req.query.key;
-  const record = dbKeys[key];
-  if (!record) return res.status(404).json({ active: false, message: 'Key không tồn tại.' });
-  
-  const now = Math.floor(Date.now() / 1000);
-  if (record.expires_at && now > record.expires_at) return res.json({ active: false, message: 'Key đã hết hạn.' });
-
-  res.json({
-    active: true,
-    status: 'active',
-    duration: '30 ngày',
-    created_at: record.activated_at ? new Date(record.activated_at * 1000).toISOString() : null,
-    expires_at: record.expires_at,
-    ip_whitelisted: !!record.ip,
-    aims: aimList,
-    vip_gamevars: vipGamevars,
-    active_vip_gamevar_id: null
-  });
-});
-
-// API Lịch sử
-app.get('/api/key-history', (req, res) => {
-  const key = req.query.key;
-  if (!dbKeys[key]) return res.json({ items: [] });
-  
-  res.json({
-    items: [
-      { time: new Date().toLocaleString('vi-VN'), ip: dbKeys[key].ip || 'N/A', status: 'OK' }
-    ]
-  });
-});
-
-// API Bật tắt Aim
-app.post('/api/client/toggle-aim', (req, res) => {
-  const { aim_id, enabled } = req.body;
-  const aim = aimList.find(a => a.id === aim_id);
-  if (aim) {
-    aim.is_active = enabled;
-    if (enabled) aimList.forEach(a => { if (a.id !== aim_id) a.is_active = false; });
-  }
-  res.json({ success: true, message: enabled ? `Đã bật ${aim.name}` : `Đã tắt ${aim.name}` });
-});
-
-// API Bật tắt VIP
-app.post('/api/client/toggle-vip-gamevar', (req, res) => {
-  const { vip_id, enabled } = req.body;
-  const vip = vipGamevars.find(v => v.id === vip_id);
-  if (vip) {
-    vip.is_active = enabled;
-    if (enabled) vipGamevars.forEach(v => { if (v.id !== vip_id) v.is_active = false; });
-  }
-  res.json({ success: true, active_vip_gamevar_id: enabled ? vip_id : null, message: enabled ? 'Đã bật VIP' : 'Đã tắt VIP' });
-});
-
-// API chứng chỉ CA
-app.get('/api/mitm-cert/info', (req, res) => {
-  res.json({ has_cert: true, filename: 'mitmproxy-ca-cert.pem', sha256: 'abc123def456ghi789' });
-});
-
-// API Thông báo
-app.get('/api/announcements/active', (req, res) => {
-  res.json({ items: [{ title: 'Chào mừng', content: 'Chúc bạn chơi game vui vẻ!', created_ts: Math.floor(Date.now()/1000) }] });
-});
-
-// Trang Admin
 app.get('/admin', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="vi">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Admin - PROXY VIP VN</title>
-      <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; }
-        .container { max-width: 1100px; margin: 0 auto; }
-        h1 { color: #38bdf8; text-align: center; margin-bottom: 20px; }
-        .create-box { background: #1e293b; padding: 20px; border-radius: 10px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
-        .input-group { display: flex; flex-direction: column; gap: 5px; }
-        .input-group label { font-size: 13px; color: #94a3b8; font-weight: bold; }
-        .input-group input { padding: 10px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; width: 100px; outline: none; }
-        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
-        .btn { padding: 10px 15px; background: #38bdf8; color: #0f172a; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; }
-        .btn-green { background: #10b981; color: white; font-size: 16px; padding: 12px 25px; }
-        table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 10px; overflow: hidden; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #334155; font-size: 13px; }
-        th { background: #334155; color: #e2e8f0; }
-        .key-code { font-family: monospace; font-weight: bold; color: #fbbf24; font-size: 15px; }
-        .status-active { color: #34d399; font-weight: bold; }
-        .status-expired { color: #ef4444; font-weight: bold; }
-        .status-none { color: #94a3b8; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h1>Quản Lý Key PROXY VIP VN</h1>
-        <div class="create-box">
-          <div class="input-group"><label>Ngày</label><input type="number" id="inputDays" value="30" min="0"></div>
-          <div class="input-group"><label>Giờ</label><input type="number" id="inputHours" value="0" min="0" max="23"></div>
-          <div class="btn-group" style="margin-right: auto;">
-            <button class="btn" onclick="setTime(1, 0)">1 Ngày</button>
-            <button class="btn" onclick="setTime(7, 0)">7 Ngày</button>
-            <button class="btn" onclick="setTime(30, 0)">30 Ngày</button>
-            <button class="btn" onclick="setTime(0, 0)">Vĩnh viễn</button>
-          </div>
-          <button class="btn btn-green" onclick="createNewKey()">+ Tạo Key Mới</button>
-        </div>
-        <div style="overflow-x:auto;">
-          <table>
-            <thead><tr><th>Key Code</th><th>Trạng Thái</th><th>Hạn Sử Dụng</th><th>IP</th></tr></thead>
-            <tbody id="keyTableBody"><tr><td colspan="4" style="text-align:center;">Đang tải...</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-      <script>
-        function setTime(d, h) { document.getElementById('inputDays').value = d; document.getElementById('inputHours').value = h; }
-        async function loadKeys() {
-          try {
-            const res = await fetch('/api/admin/list'); const data = await res.json();
-            const tbody = document.getElementById('keyTableBody');
-            if (data.length === 0) return tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Chưa có key.</td></tr>';
-            const now = Math.floor(Date.now() / 1000);
-            tbody.innerHTML = data.map(k => {
-              let s = '⚪ Chưa dùng', c = 'status-none', e = 'Vĩnh viễn';
-              if (k.expires_at) { e = new Date(k.expires_at * 1000).toLocaleString('vi-VN'); if (now > k.expires_at) { s = '🔴 Hết hạn'; c = 'status-expired'; } }
-              if (k.ip && now <= (k.expires_at || Infinity)) { s = '🟢 Đã dùng'; c = 'status-active'; }
-              return `<tr><td class="key-code">${k.key_code}</td><td class="${c}">${s}</td><td>${e}</td><td>${k.ip || '-'}</td></tr>`;
-            }).join('');
-          } catch(e) { document.getElementById('keyTableBody').innerHTML = '<tr><td colspan="4">Lỗi.</td></tr>'; }
-        }
-        async function createNewKey() {
-          const d = document.getElementById('inputDays').value || 0, h = document.getElementById('inputHours').value || 0;
-          try { await fetch(`/api/admin/genkey?days=${d}&hours=${h}`); loadKeys(); } catch(e) { alert('Lỗi'); }
-        }
-        loadKeys();
-      </script>
-    </body>
-    </html>
-  `);
-});
-
-app.get('/api/admin/list', (req, res) => {
-  const list = Object.keys(dbKeys).map(k => ({ key_code: k, ...dbKeys[k] }));
-  list.sort((a, b) => b.created_at - a.created_at);
-  res.json(list);
-});
-
-app.get('/api/admin/genkey', (req, res) => {
-  const days = parseInt(req.query.days) || 0; const hours = parseInt(req.query.hours) || 0;
-  const now = Math.floor(Date.now() / 1000); const total = (days*24*60*60)+(hours*60*60);
-  const exp = total > 0 ? now + total : null;
-  const newKey = generateKey();
-  
-  dbKeys[newKey] = { expires_at: exp, activated_at: null, created_at: now, ip: null, device_id: null };
-  res.json({ ok: true, key: newKey });
+  res.send('<h1 style="color:white;background:black;text-align:center;padding:50px;">SERVER ĐANG HOẠT ĐỘNG TỐT!</h1>');
 });
 
 const PORT = process.env.PORT || 3000;
