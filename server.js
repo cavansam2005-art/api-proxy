@@ -6,7 +6,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Lưu Key trên RAM
 const dbKeys = {};
 
 function generateKey() {
@@ -29,7 +28,6 @@ app.get('/api/whoami', (req, res) => {
   res.json({ ip: ip || "127.0.0.1" });
 });
 
-// API Kích hoạt (Trả về thời gian hết hạn)
 app.post('/api/activate', (req, res) => {
   const { key, device_name } = req.body;
 
@@ -44,17 +42,15 @@ app.post('/api/activate', (req, res) => {
     return res.json({ ok: false, message: 'Key đã hết hạn sử dụng.' });
   }
 
-  // Cập nhật tên thiết bị
   record.device_name = device_name;
 
   res.json({
     ok: true,
     message: 'Kích hoạt thành công!',
-    expires_at: record.expires_at // Trả về thời gian hết hạn (hoặc null nếu vĩnh viễn)
+    expires_at: record.expires_at 
   });
 });
 
-// TRANG ADMIN
 app.get('/admin', (req, res) => {
   res.send(`
     <!DOCTYPE html>
