@@ -6,8 +6,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Lưu Key trên RAM (kèm ID)
 const dbKeys = {};
+let keyCounter = 1; // Bộ đếm ID tự động
 
+// Hàm tạo Key ngẫu nhiên
 function generateKey() {
   let result = 'KEY';
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -51,6 +54,9 @@ app.post('/api/activate', (req, res) => {
   });
 });
 
+// ==========================================
+// TRANG ADMIN (GIAO DIỆN NÂNG CẤP)
+// ==========================================
 app.get('/admin', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -58,65 +64,177 @@ app.get('/admin', (req, res) => {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Admin - Tạo Key</title>
+      <title>Admin Dashboard - Quản Lý Key</title>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
       <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; }
-        .container { max-width: 1100px; margin: 0 auto; }
-        h1 { color: #38bdf8; text-align: center; margin-bottom: 20px; }
-        .create-box { background: #1e293b; padding: 20px; border-radius: 10px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
-        .input-group { display: flex; flex-direction: column; gap: 5px; }
-        .input-group label { font-size: 13px; color: #94a3b8; font-weight: bold; }
-        .input-group input { padding: 10px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; width: 100px; outline: none; }
+        :root {
+          --bg: #0f172a;
+          --card: #1e293b;
+          --border: #334155;
+          --primary: #38bdf8;
+          --success: #10b981;
+          --danger: #ef4444;
+          --text: #f8fafc;
+          --text-muted: #94a3b8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+        
+        .container { width: 100%; max-width: 1000px; }
+        h1 { font-size: 24px; font-weight: 700; margin-bottom: 20px; text-align: center; color: var(--primary); }
+
+        /* Form tạo key */
+        .create-card {
+          background: var(--card); border: 1px solid var(--border);
+          border-radius: 12px; padding: 20px; margin-bottom: 25px;
+          display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .input-group { display: flex; flex-direction: column; gap: 6px; }
+        .input-group label { font-size: 13px; font-weight: 500; color: var(--text-muted); }
+        .input-group input {
+          background: #0f172a; border: 1px solid var(--border); color: #fff;
+          padding: 10px 12px; border-radius: 8px; font-size: 15px; width: 120px; outline: none; transition: 0.2s;
+        }
+        .input-group input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2); }
+
         .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
-        .btn { padding: 10px 15px; background: #38bdf8; color: #0f172a; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; }
-        .btn-green { background: #10b981; color: white; font-size: 16px; padding: 12px 25px; }
-        table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 10px; overflow: hidden; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #334155; font-size: 13px; }
-        th { background: #334155; color: #e2e8f0; }
-        .key-code { font-family: monospace; font-weight: bold; color: #fbbf24; font-size: 15px; }
+        .btn {
+          padding: 10px 16px; border: none; border-radius: 8px;
+          font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s;
+          display: flex; align-items: center; gap: 6px;
+        }
+        .btn:active { transform: scale(0.96); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-outline:hover { background: rgba(255,255,255,0.05); }
+        .btn-primary { background: var(--success); color: #fff; font-size: 15px; padding: 12px 24px; }
+        .btn-primary:hover { background: #059669; }
+
+        /* Bảng dữ liệu */
+        .table-card {
+          background: var(--card); border: 1px solid var(--border);
+          border-radius: 12px; overflow: hidden;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 15px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        th { background: rgba(255,255,255,0.02); color: var(--text-muted); font-weight: 600; }
+        tr:last-child td { border-bottom: none; }
+        
+        .key-code { font-family: monospace; font-weight: 700; color: #fbbf24; font-size: 15px; }
+        .id-badge { background: var(--border); color: var(--text); padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+        
+        .status { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block; }
+        .status.active { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+        .status.expired { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+        .status.never { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); }
+
+        @media (max-width: 600px) {
+          .create-card { flex-direction: column; align-items: stretch; }
+          .input-group input { width: 100%; }
+          .btn-group { flex-direction: column; }
+          .btn { width: 100%; justify-content: center; }
+        }
       </style>
     </head>
     <body>
       <div class="container">
-        <h1>Quản Lý Key Độ Nhạy</h1>
-        <div class="create-box">
-          <div class="input-group"><label>Ngày</label><input type="number" id="inputDays" value="30" min="0"></div>
-          <div class="input-group"><label>Giờ</label><input type="number" id="inputHours" value="0" min="0" max="23"></div>
-          <div class="btn-group" style="margin-right: auto;">
-            <button class="btn" onclick="setTime(1, 0)">1 Ngày</button>
-            <button class="btn" onclick="setTime(7, 0)">7 Ngày</button>
-            <button class="btn" onclick="setTime(30, 0)">30 Ngày</button>
-            <button class="btn" onclick="setTime(0, 0)">Vĩnh viễn</button>
+        <h1>Quản Lý Key Hệ Thống</h1>
+        
+        <div class="create-card">
+          <div class="input-group">
+            <label>Nhập Ngày</label>
+            <input type="number" id="inputDays" value="30" min="0">
           </div>
-          <button class="btn btn-green" onclick="createNewKey()">+ Tạo Key Mới</button>
+          <div class="input-group">
+            <label>Nhập Giờ</label>
+            <input type="number" id="inputHours" value="0" min="0" max="23">
+          </div>
+          
+          <div class="btn-group" style="margin-right: auto;">
+            <button class="btn btn-outline" onclick="setTime(1, 0)">1 Ngày</button>
+            <button class="btn btn-outline" onclick="setTime(7, 0)">7 Ngày</button>
+            <button class="btn btn-outline" onclick="setTime(30, 0)">30 Ngày</button>
+            <button class="btn btn-outline" onclick="setTime(0, 0)">Vĩnh viễn</button>
+          </div>
+
+          <button class="btn btn-primary" onclick="createNewKey()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            Tạo Key
+          </button>
         </div>
-        <div style="overflow-x:auto;">
+
+        <div class="table-card">
           <table>
-            <thead><tr><th>Key Code</th><th>Hạn Sử Dụng</th></tr></thead>
-            <tbody id="keyTableBody"><tr><td colspan="2" style="text-align:center;">Đang tải...</td></tr></tbody>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Key Code</th>
+                <th>Trạng Thái</th>
+                <th>Hạn Sử Dụng</th>
+              </tr>
+            </thead>
+            <tbody id="keyTableBody">
+              <tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Đang tải dữ liệu...</td></tr>
+            </tbody>
           </table>
         </div>
       </div>
+
       <script>
-        function setTime(d, h) { document.getElementById('inputDays').value = d; document.getElementById('inputHours').value = h; }
+        function setTime(d, h) { 
+          document.getElementById('inputDays').value = d; 
+          document.getElementById('inputHours').value = h; 
+        }
+
         async function loadKeys() {
           try {
-            const res = await fetch('/api/admin/list'); const data = await res.json();
+            const res = await fetch('/api/admin/list'); 
+            const data = await res.json();
             const tbody = document.getElementById('keyTableBody');
-            if (data.length === 0) return tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Chưa có key.</td></tr>';
+            
+            if (data.length === 0) return tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Chưa có Key nào được tạo.</td></tr>';
+            
             const now = Math.floor(Date.now() / 1000);
+            
             tbody.innerHTML = data.map(k => {
-              let e = 'Vĩnh viễn';
-              if (k.expires_at) { e = new Date(k.expires_at * 1000).toLocaleString('vi-VN'); }
-              return \`<tr><td class="key-code">\${k.key_code}</td><td>\${e}</td></tr>\`;
+              let expiresStr = 'Vĩnh viễn';
+              let statusHtml = '<span class="status never">Chưa dùng</span>';
+              
+              if (k.expires_at) { 
+                expiresStr = new Date(k.expires_at * 1000).toLocaleString('vi-VN'); 
+                if (now > k.expires_at) { 
+                  statusHtml = '<span class="status expired">Hết hạn</span>'; 
+                } else {
+                  statusHtml = '<span class="status active">Đang chạy</span>';
+                }
+              } else {
+                statusHtml = '<span class="status active">Vĩnh viễn</span>';
+              }
+
+              return \`
+                <tr>
+                  <td><span class="id-badge">#\${k.id}</span></td>
+                  <td class="key-code">\${k.key_code}</td>
+                  <td>\${statusHtml}</td>
+                  <td style="color:var(--text-muted);">\${expiresStr}</td>
+                </tr>
+              \`;
             }).join('');
-          } catch(e) { document.getElementById('keyTableBody').innerHTML = '<tr><td colspan="2">Lỗi.</td></tr>'; }
+          } catch(e) { 
+            document.getElementById('keyTableBody').innerHTML = '<tr><td colspan="4" style="color:red; text-align:center;">Lỗi tải dữ liệu</td></tr>'; 
+          }
         }
+
         async function createNewKey() {
-          const d = document.getElementById('inputDays').value || 0, h = document.getElementById('inputHours').value || 0;
-          try { await fetch(\`/api/admin/genkey?days=\${d}&hours=\${h}\`); loadKeys(); } catch(e) { alert('Lỗi'); }
+          const d = document.getElementById('inputDays').value || 0;
+          const h = document.getElementById('inputHours').value || 0;
+          try { 
+            await fetch(\`/api/admin/genkey?days=\${d}&hours=\${h}\`); 
+            loadKeys(); 
+          } catch(e) { alert('Lỗi khi tạo Key'); }
         }
+
         loadKeys();
       </script>
     </body>
@@ -126,7 +244,8 @@ app.get('/admin', (req, res) => {
 
 app.get('/api/admin/list', (req, res) => {
   const list = Object.keys(dbKeys).map(k => ({ key_code: k, ...dbKeys[k] }));
-  list.sort((a, b) => b.created_at - a.created_at);
+  // Sắp xếp theo ID giảm dần (mới nhất lên đầu)
+  list.sort((a, b) => b.id - a.id);
   res.json(list);
 });
 
@@ -138,7 +257,14 @@ app.get('/api/admin/genkey', (req, res) => {
   const exp = total > 0 ? now + total : null;
   const newKey = generateKey();
   
-  dbKeys[newKey] = { expires_at: exp, created_at: now, device_name: null };
+  // Lưu Key với ID tự tăng
+  dbKeys[newKey] = { 
+    id: keyCounter++, 
+    expires_at: exp, 
+    created_at: now, 
+    device_name: null 
+  };
+  
   res.json({ ok: true, key: newKey });
 });
 
