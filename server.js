@@ -1,15 +1,14 @@
 const express = require('express');
 const cors = require('cors');
-
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Lưu trữ Key trên RAM
+// Lưu Key trên RAM
 const dbKeys = {};
 
-// Hàm tạo Key ngẫu nhiên
 function generateKey() {
   let result = 'KEY';
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -23,7 +22,7 @@ function generateKey() {
   return result;
 }
 
-// 1. API lấy IP
+// API lấy IP
 app.get('/api/whoami', (req, res) => {
   let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
@@ -31,9 +30,9 @@ app.get('/api/whoami', (req, res) => {
   res.json({ ip: ip || "127.0.0.1" });
 });
 
-// 2. API Kích hoạt Key
+// API Kích hoạt (Trả về Mã độ nhạy)
 app.post('/api/activate', (req, res) => {
-  const { key, ip, device_id } = req.body;
+  const { key } = req.body;
 
   if (!dbKeys[key]) {
     return res.json({ ok: false, message: 'Key không tồn tại.' });
@@ -46,28 +45,18 @@ app.post('/api/activate', (req, res) => {
     return res.json({ ok: false, message: 'Key đã hết hạn.' });
   }
 
-  record.ip = ip;
-  record.device_id = device_id;
+  // ĐÂY LÀ MÃ ĐỘ NHẠY (Bạn có thể thay đổi mã này tùy ý)
+  const sensCode = "SENS-FREEFIRE-VIP-9999"; 
 
   res.json({
     ok: true,
     message: 'Kích hoạt thành công!',
-    expires_at: record.expires_at
+    expires_at: record.expires_at,
+    sens_code: sensCode
   });
 });
 
-// 3. API Kiểm tra trạng thái
-app.post('/api/status', (req, res) => {
-  const { key, device_id } = req.body;
-  const record = dbKeys[key];
-
-  if (!record || !record.device_id) return res.json({ state: "none" });
-  if (record.device_id !== device_id) return res.json({ state: "active", device_conflict: true });
-  
-  res.json({ state: "active", expires_at: record.expires_at, ip_matches: true });
-});
-
-// 4. TRANG ADMIN QUẢN LÝ
+// Trang Admin
 app.get('/admin', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -75,7 +64,7 @@ app.get('/admin', (req, res) => {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Admin - PROXY VIP</title>
+      <title>Admin - Tạo Key Độ Nhạy</title>
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; }
@@ -92,14 +81,11 @@ app.get('/admin', (req, res) => {
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #334155; font-size: 13px; }
         th { background: #334155; color: #e2e8f0; }
         .key-code { font-family: monospace; font-weight: bold; color: #fbbf24; font-size: 15px; }
-        .status-active { color: #34d399; font-weight: bold; }
-        .status-expired { color: #ef4444; font-weight: bold; }
-        .status-none { color: #94a3b8; }
       </style>
     </head>
     <body>
       <div class="container">
-        <h1>Quản Lý Key Proxy VIP</h1>
+        <h1>Quản Lý Key Độ Nhạy</h1>
         <div class="create-box">
           <div class="input-group"><label>Ngày</label><input type="number" id="inputDays" value="30" min="0"></div>
           <div class="input-group"><label>Giờ</label><input type="number" id="inputHours" value="0" min="0" max="23"></div>
@@ -113,8 +99,8 @@ app.get('/admin', (req, res) => {
         </div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr><th>Key Code</th><th>Trạng Thái</th><th>Hạn Sử Dụng</th><th>IP</th></tr></thead>
-            <tbody id="keyTableBody"><tr><td colspan="4" style="text-align:center;">Đang tải...</td></tr></tbody>
+            <thead><tr><th>Key Code</th><th>Hạn Sử Dụng</th></tr></thead>
+            <tbody id="keyTableBody"><tr><td colspan="2" style="text-align:center;">Đang tải...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -124,15 +110,14 @@ app.get('/admin', (req, res) => {
           try {
             const res = await fetch('/api/admin/list'); const data = await res.json();
             const tbody = document.getElementById('keyTableBody');
-            if (data.length === 0) return tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Chưa có key.</td></tr>';
+            if (data.length === 0) return tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Chưa có key.</td></tr>';
             const now = Math.floor(Date.now() / 1000);
             tbody.innerHTML = data.map(k => {
-              let s = '⚪ Chưa dùng', c = 'status-none', e = 'Vĩnh viễn';
-              if (k.expires_at) { e = new Date(k.expires_at * 1000).toLocaleString('vi-VN'); if (now > k.expires_at) { s = '🔴 Hết hạn'; c = 'status-expired'; } }
-              if (k.ip && now <= (k.expires_at || Infinity)) { s = '🟢 Đã dùng'; c = 'status-active'; }
-              return \`<tr><td class="key-code">\${k.key_code}</td><td class="\${c}">\${s}</td><td>\${e}</td><td>\${k.ip || '-'}</td></tr>\`;
+              let e = 'Vĩnh viễn';
+              if (k.expires_at) { e = new Date(k.expires_at * 1000).toLocaleString('vi-VN'); }
+              return \`<tr><td class="key-code">\${k.key_code}</td><td>\${e}</td></tr>\`;
             }).join('');
-          } catch(e) { document.getElementById('keyTableBody').innerHTML = '<tr><td colspan="4">Lỗi.</td></tr>'; }
+          } catch(e) { document.getElementById('keyTableBody').innerHTML = '<tr><td colspan="2">Lỗi.</td></tr>'; }
         }
         async function createNewKey() {
           const d = document.getElementById('inputDays').value || 0, h = document.getElementById('inputHours').value || 0;
