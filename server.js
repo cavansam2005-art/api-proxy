@@ -31,7 +31,7 @@ app.get('/api/whoami', (req, res) => {
   res.json({ ip: ip || "127.0.0.1" });
 });
 
-// API Xác thực Key cho App Alok
+// API Xác thực Key (Dành cho App gọi lên)
 app.post('/api/verify-key', (req, res) => {
   const { key } = req.body;
   if (!dbKeys[key]) {
@@ -45,7 +45,7 @@ app.post('/api/verify-key', (req, res) => {
   res.json({ ok: true, message: 'Xác thực thành công!' });
 });
 
-// API Kích hoạt (Dùng cho giao diện cũ của bạn nếu cần)
+// API Kích hoạt (Dùng cho giao diện cũ)
 app.post('/api/activate', (req, res) => {
   const { key, device_name } = req.body;
   if (!dbKeys[key]) return res.json({ ok: false, message: 'Key không tồn tại.' });
@@ -56,7 +56,9 @@ app.post('/api/activate', (req, res) => {
   res.json({ ok: true, message: 'Kích hoạt thành công!', expires_at: record.expires_at });
 });
 
+// ==========================================
 // TRANG ADMIN QUẢN LÝ KEY
+// ==========================================
 app.get('/admin', (req, res) => {
   const html = `<!DOCTYPE html>
 <html lang="vi">
