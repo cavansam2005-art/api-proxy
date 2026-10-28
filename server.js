@@ -4,8 +4,8 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Lưu trữ Key trên RAM
 const dbKeys = {};
 
 function generateKey() {
@@ -14,11 +14,13 @@ function generateKey() {
   return `KEY-${part()}-${part()}-${part()}`;
 }
 
-// Các danh sách giả lập
+// Giả lập danh sách Aim & VIP
 const aimList = [
   { id: 'aim_1', name: 'Aim Drag On 2.0', label: 'Aim Drag On 2.0', is_active: false },
-  { id: 'aim_2', name: 'Aim Chest', label: 'Aim Chest', is_active: false }
+  { id: 'aim_2', name: 'Aim Chest', label: 'Aim Chest', is_active: false },
+  { id: 'aim_3', name: 'Aim Neck', label: 'Aim Neck', is_active: false }
 ];
+
 const vipGamevars = [
   { id: 'vip_1', name: 'Magic Bullet', is_active: false },
   { id: 'vip_2', name: 'Speed Hack', is_active: false }
@@ -121,7 +123,7 @@ app.get('/api/announcements/active', (req, res) => {
   res.json({ items: [{ title: 'Chào mừng', content: 'Chúc bạn chơi game vui vẻ!', created_ts: Math.floor(Date.now()/1000) }] });
 });
 
-// Trang Admin (Quản lý key)
+// Trang Admin
 app.get('/admin', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -129,7 +131,7 @@ app.get('/admin', (req, res) => {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Admin - SAMM VIP IOS</title>
+      <title>Admin - PROXY VIP VN</title>
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; }
@@ -153,7 +155,7 @@ app.get('/admin', (req, res) => {
     </head>
     <body>
       <div class="container">
-        <h1>Quản Lý Key SAMM VIP IOS</h1>
+        <h1>Quản Lý Key PROXY VIP VN</h1>
         <div class="create-box">
           <div class="input-group"><label>Ngày</label><input type="number" id="inputDays" value="30" min="0"></div>
           <div class="input-group"><label>Giờ</label><input type="number" id="inputHours" value="0" min="0" max="23"></div>
