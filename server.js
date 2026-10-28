@@ -1,28 +1,12 @@
 const express = require('express');
 const cors = require('cors');
-const Database = require('better-sqlite3');
-
 const app = express();
+
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Khởi tạo Database
-const db = new Database('db.sqlite');
-db.exec(`
-  CREATE TABLE IF NOT EXISTS keys (
-    key_code TEXT PRIMARY KEY,
-    ip TEXT,
-    device_id TEXT,
-    expires_at INTEGER,
-    activated_at INTEGER,
-    created_at INTEGER,
-    mod_name TEXT,
-    file_name TEXT,
-    server_host TEXT,
-    server_port INTEGER
-  )
-`);
+// Lưu trữ Key tạm thời trên RAM (Không dùng Database để tránh lỗi Render)
+const dbKeys = {};
 
 function generateKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -30,79 +14,23 @@ function generateKey() {
   return `KEY-${part()}-${part()}-${part()}`;
 }
 
-// API Xử lý giao diện ZENITH
-app.post('/', (req, res) => {
-  const { action, key_code, browser_uuid, file_name, mod_type, client_ip } = req.body;
-
-  if (action === 'get_aims') {
-    return res.json({
-      status: 'success',
-      aims: [
-        { file: 'aim_dragon2.txt', name: 'Aim Drag On 2.0', icon: 'fa-bolt', desc: 'Smooth track', server: 'dhieushop.click', port: 7776 },
-        { file: 'aim_chest.txt', name: 'Aim Chest', icon: 'fa-crosshairs', desc: 'Chest lock', server: 'dhieushop.click', port: 7777 }
-      ]
-    });
-  }
-
-  if (action === 'check_key') {
-    const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
-    if (!record) return res.json({ status: 'error', message: 'Key không tồn tại.' });
-    
-    const now = Math.floor(Date.now() / 1000);
-    if (record.expires_at && now > record.expires_at) return res.json({ status: 'error', message: 'Key đã hết hạn.' });
-    if (record.device_id && record.device_id !== browser_uuid) return res.json({ status: 'error', message: 'Key đã dùng trên thiết bị khác.' });
-
-    if (record.ip) {
-      return res.json({
-        status: 'success', activated: true, expires_at: record.expires_at,
-        activation_data: { mod: record.mod_name, file: record.file_name, server: record.server_host, port: record.server_port }
-      });
-    }
-    return res.json({ status: 'success', activated: false, expires_at: record.expires_at });
-  }
-
-  if (action === 'add_ip') {
-    const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
-    if (!record) return res.json({ status: 'error', message: 'Key không tồn tại.' });
-
-    let server = 'dhieushop.click';
-    let port = 7776;
-    if (file_name === 'aim_chest.txt') port = 7777;
-
-    const now = Math.floor(Date.now() / 1000);
-    db.prepare('UPDATE keys SET ip = ?, device_id = ?, activated_at = ?, mod_name = ?, file_name = ?, server_host = ?, server_port = ? WHERE key_code = ?')
-      .run(client_ip, browser_uuid, now, mod_type, file_name, server, port, key_code);
-
-    return res.json({ status: 'success', expires_at: record.expires_at, server: server, port: port });
-  }
-
-  if (action === 'remove_ip') {
-    db.prepare('UPDATE keys SET ip = NULL, mod_name = NULL, file_name = NULL WHERE key_code = ?').run(key_code);
-    return res.json({ status: 'success' });
-  }
-
-  if (action === 'check_status') {
-    const record = db.prepare('SELECT * FROM keys WHERE key_code = ?').get(key_code);
-    if (!record || !record.ip) return res.json({ status: 'success', active: false });
-    const now = Math.floor(Date.now() / 1000);
-    if (record.expires_at && now > record.expires_at) return res.json({ status: 'success', active: false, expired: true });
-    
-    return res.json({
-      status: 'success', active: true,
-      data: { mod: record.mod_name, file: record.file_name, server: record.server_host, port: record.server_port, expires_at: record.expires_at }
-    });
-  }
-});
-
-// API lấy IP
-app.get('/api/whoami', (req, res) => {
+app.get('/whoami', (req, res) => {
   let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
   if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7);
   res.json({ ip: ip || "127.0.0.1" });
 });
 
-// Trang Admin
+app.post('/submit', (req, res) => {
+  const { key, ip } = req.body;
+  if (!dbKeys[key]) return res.status(404).json({ message: 'Key không tồn tại.' });
+  dbKeys[key].ip = ip;
+  res.json({ message: 'Kích hoạt thành công!', expires_at: dbKeys[key].expires_at, duration: '30 Ngày', aims: [], vip_gamevars: [] });
+});
+
+// ==========================================
+// TRANG ADMIN
+// ==========================================
 app.get('/admin', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -110,7 +38,7 @@ app.get('/admin', (req, res) => {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Admin - SAMM VIP IOS</title>
+      <title>Admin - PROXY VIP VN</title>
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; }
@@ -134,7 +62,7 @@ app.get('/admin', (req, res) => {
     </head>
     <body>
       <div class="container">
-        <h1>Quản Lý Key SAMM VIP IOS</h1>
+        <h1>Quản Lý Key PROXY VIP VN</h1>
         <div class="create-box">
           <div class="input-group"><label>Ngày</label><input type="number" id="inputDays" value="30" min="0"></div>
           <div class="input-group"><label>Giờ</label><input type="number" id="inputHours" value="0" min="0" max="23"></div>
@@ -171,7 +99,7 @@ app.get('/admin', (req, res) => {
         }
         async function createNewKey() {
           const d = document.getElementById('inputDays').value || 0, h = document.getElementById('inputHours').value || 0;
-          try { await fetch(`/api/admin/genkey?days=${d}&hours=${h}`); loadKeys(); } catch(e) { alert('Lỗi'); }
+          try { await fetch('/api/admin/genkey?days=' + d + '&hours=' + h); loadKeys(); } catch(e) { alert('Lỗi'); }
         }
         loadKeys();
       </script>
@@ -180,15 +108,21 @@ app.get('/admin', (req, res) => {
   `);
 });
 
-app.get('/api/admin/list', (req, res) => res.json(db.prepare('SELECT * FROM keys ORDER BY created_at DESC').all()));
+app.get('/api/admin/list', (req, res) => {
+  const list = Object.keys(dbKeys).map(k => ({ key_code: k, ...dbKeys[k] }));
+  list.sort((a, b) => b.created_at - a.created_at);
+  res.json(list);
+});
+
 app.get('/api/admin/genkey', (req, res) => {
   const days = parseInt(req.query.days) || 0; const hours = parseInt(req.query.hours) || 0;
   const now = Math.floor(Date.now() / 1000); const total = (days*24*60*60)+(hours*60*60);
   const exp = total > 0 ? now + total : null;
   const newKey = generateKey();
-  db.prepare('INSERT INTO keys (key_code, expires_at, created_at) VALUES (?, ?, ?)').run(newKey, exp, now);
+  
+  dbKeys[newKey] = { expires_at: exp, created_at: now, ip: null };
   res.json({ ok: true, key: newKey });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server chạy cổng ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log('🚀 Server đang chạy!'));
