@@ -94,7 +94,7 @@ app.get('/admin', (req, res) => {
         .input-group label { font-size: 13px; font-weight: 500; color: var(--text-muted); }
         .input-group input {
           background: #0f172a; border: 1px solid var(--border); color: #fff;
-          padding: 10px 12px; border-radius: 8px; font-size: 15px; width: 120px; outline: none; transition: 0.2s;
+          padding: 10px 12px; border-radius: 8px; font-size: 15px; width: 100px; outline: none; transition: 0.2s;
         }
         .input-group input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2); }
 
@@ -102,13 +102,15 @@ app.get('/admin', (req, res) => {
         .btn {
           padding: 10px 16px; border: none; border-radius: 8px;
           font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s;
-          display: flex; align-items: center; gap: 6px;
+          display: flex; align-items: center; justify-content: center; gap: 6px;
         }
         .btn:active { transform: scale(0.96); }
         .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
         .btn-outline:hover { background: rgba(255,255,255,0.05); }
         .btn-primary { background: var(--success); color: #fff; font-size: 15px; padding: 12px 24px; }
         .btn-primary:hover { background: #059669; }
+        .btn-copy-all { background: var(--primary); color: #fff; }
+        .btn-copy-all:hover { background: #0284c7; }
 
         /* Bảng dữ liệu */
         .table-card {
@@ -116,6 +118,7 @@ app.get('/admin', (req, res) => {
           border-radius: 12px; overflow: hidden;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
+        .table-header { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid var(--border); }
         table { width: 100%; border-collapse: collapse; text-align: left; }
         th, td { padding: 15px; border-bottom: 1px solid var(--border); font-size: 14px; }
         th { background: rgba(255,255,255,0.02); color: var(--text-muted); font-weight: 600; }
@@ -129,11 +132,15 @@ app.get('/admin', (req, res) => {
         .status.expired { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
         .status.never { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); }
 
+        /* Nút Copy nhỏ */
+        .btn-copy { background: var(--border); color: var(--text); border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; }
+        .btn-copy:active { background: var(--primary); color: #000; }
+
         @media (max-width: 600px) {
           .create-card { flex-direction: column; align-items: stretch; }
           .input-group input { width: 100%; }
           .btn-group { flex-direction: column; }
-          .btn { width: 100%; justify-content: center; }
+          .btn { width: 100%; }
         }
       </style>
     </head>
@@ -141,14 +148,19 @@ app.get('/admin', (req, res) => {
       <div class="container">
         <h1>Quản Lý Key Hệ Thống</h1>
         
+        <!-- Form tạo Key -->
         <div class="create-card">
           <div class="input-group">
-            <label>Nhập Ngày</label>
+            <label>Thời hạn (Ngày)</label>
             <input type="number" id="inputDays" value="30" min="0">
           </div>
           <div class="input-group">
-            <label>Nhập Giờ</label>
+            <label>Thời hạn (Giờ)</label>
             <input type="number" id="inputHours" value="0" min="0" max="23">
+          </div>
+          <div class="input-group">
+            <label>Số lượng Key cần tạo</label>
+            <input type="number" id="inputQty" value="1" min="1" max="100" style="border-color: var(--success);">
           </div>
           
           <div class="btn-group" style="margin-right: auto;">
@@ -164,7 +176,12 @@ app.get('/admin', (req, res) => {
           </button>
         </div>
 
+        <!-- Bảng hiển thị Key -->
         <div class="table-card">
+          <div class="table-header">
+            <div style="font-weight: 600; font-size: 16px;">Danh sách Key</div>
+            <button class="btn btn-copy-all" onclick="copyAllKeys()">📋 Sao chép tất cả</button>
+          </div>
           <table>
             <thead>
               <tr>
@@ -172,10 +189,11 @@ app.get('/admin', (req, res) => {
                 <th>Key Code</th>
                 <th>Trạng Thái</th>
                 <th>Hạn Sử Dụng</th>
+                <th>Hành động</th>
               </tr>
             </thead>
             <tbody id="keyTableBody">
-              <tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Đang tải dữ liệu...</td></tr>
+              <tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Đang tải dữ liệu...</td></tr>
             </tbody>
           </table>
         </div>
@@ -193,7 +211,7 @@ app.get('/admin', (req, res) => {
             const data = await res.json();
             const tbody = document.getElementById('keyTableBody');
             
-            if (data.length === 0) return tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Chưa có Key nào được tạo.</td></tr>';
+            if (data.length === 0) return tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Chưa có Key nào được tạo.</td></tr>';
             
             const now = Math.floor(Date.now() / 1000);
             
@@ -218,21 +236,56 @@ app.get('/admin', (req, res) => {
                   <td class="key-code">\${k.key_code}</td>
                   <td>\${statusHtml}</td>
                   <td style="color:var(--text-muted);">\${expiresStr}</td>
+                  <td><button class="btn-copy" onclick="copyKey('\${k.key_code}', this)">Sao chép</button></td>
                 </tr>
               \`;
             }).join('');
           } catch(e) { 
-            document.getElementById('keyTableBody').innerHTML = '<tr><td colspan="4" style="color:red; text-align:center;">Lỗi tải dữ liệu</td></tr>'; 
+            document.getElementById('keyTableBody').innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Lỗi tải dữ liệu</td></tr>'; 
           }
         }
 
         async function createNewKey() {
-          const d = document.getElementById('inputDays').value || 0;
-          const h = document.getElementById('inputHours').value || 0;
+          const d = parseInt(document.getElementById('inputDays').value) || 0;
+          const h = parseInt(document.getElementById('inputHours').value) || 0;
+          const qty = parseInt(document.getElementById('inputQty').value) || 1;
+
+          if(qty < 1 || qty > 100) return alert('Số lượng Key phải từ 1 đến 100.');
+
           try { 
-            await fetch(\`/api/admin/genkey?days=\${d}&hours=\${h}\`); 
+            await fetch(\`/api/admin/genkey?days=\${d}&hours=\${h}&qty=\${qty}\`); 
             loadKeys(); 
           } catch(e) { alert('Lỗi khi tạo Key'); }
+        }
+
+        // Hàm copy 1 key
+        function copyKey(text, btn) {
+          navigator.clipboard.writeText(text).then(() => {
+            const oldText = btn.innerText;
+            btn.innerText = 'Đã chép!';
+            btn.style.background = 'var(--success)';
+            btn.style.color = '#fff';
+            setTimeout(() => {
+              btn.innerText = oldText;
+              btn.style.background = '';
+              btn.style.color = '';
+            }, 1500);
+          }).catch(() => alert('Lỗi khi sao chép!'));
+        }
+
+        // Hàm copy tất cả key
+        async function copyAllKeys() {
+          try {
+            const res = await fetch('/api/admin/list'); 
+            const data = await res.json();
+            if (data.length === 0) return alert('Chưa có Key nào để sao chép!');
+            
+            const allKeys = data.map(k => k.key_code).join('\\n');
+            
+            navigator.clipboard.writeText(allKeys).then(() => {
+              alert(\`Đã sao chép toàn bộ \${data.length} Key vào bộ nhớ tạm!\`);
+            }).catch(() => alert('Lỗi khi sao chép!'));
+          } catch(e) { alert('Lỗi tải dữ liệu!'); }
         }
 
         loadKeys();
@@ -244,28 +297,34 @@ app.get('/admin', (req, res) => {
 
 app.get('/api/admin/list', (req, res) => {
   const list = Object.keys(dbKeys).map(k => ({ key_code: k, ...dbKeys[k] }));
-  // Sắp xếp theo ID giảm dần (mới nhất lên đầu)
   list.sort((a, b) => b.id - a.id);
   res.json(list);
 });
 
+// Cập nhật API tạo Key để hỗ trợ tạo hàng loạt (qty)
 app.get('/api/admin/genkey', (req, res) => {
   const days = parseInt(req.query.days) || 0; 
   const hours = parseInt(req.query.hours) || 0;
+  const qty = parseInt(req.query.qty) || 1; // Số lượng key muốn tạo
+  
   const now = Math.floor(Date.now() / 1000); 
   const total = (days * 24 * 60 * 60) + (hours * 60 * 60);
   const exp = total > 0 ? now + total : null;
-  const newKey = generateKey();
   
-  // Lưu Key với ID tự tăng
-  dbKeys[newKey] = { 
-    id: keyCounter++, 
-    expires_at: exp, 
-    created_at: now, 
-    device_name: null 
-  };
+  let generatedKeys = [];
+
+  for (let i = 0; i < qty; i++) {
+    const newKey = generateKey();
+    dbKeys[newKey] = { 
+      id: keyCounter++, 
+      expires_at: exp, 
+      created_at: now, 
+      device_name: null 
+    };
+    generatedKeys.push(newKey);
+  }
   
-  res.json({ ok: true, key: newKey });
+  res.json({ ok: true, count: generatedKeys.length, keys: generatedKeys });
 });
 
 const PORT = process.env.PORT || 3000;
