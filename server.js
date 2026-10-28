@@ -162,13 +162,15 @@ app.get('/admin', (req, res) => {
       } catch(e) { alert('Lỗi khi tạo Key'); }
     }
 
+    // Hàm copy 1 key (Đã tối ưu cho điện thoại)
     function copyKey(text, btn) {
       try {
         const textArea = document.createElement("textarea");
         textArea.value = text;
-        textArea.style.position = "fixed"; textArea.style.left = "-9999px";
+        textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0";
         document.body.appendChild(textArea);
         textArea.focus(); textArea.select();
+        textArea.setSelectionRange(0, 99999); // Fix cho iOS
         document.execCommand('copy');
         textArea.remove();
 
@@ -182,23 +184,27 @@ app.get('/admin', (req, res) => {
       } catch (err) { alert('Lỗi khi sao chép!'); }
     }
 
+    // Hàm copy tất cả (Đã tối ưu cho điện thoại)
     async function copyAllKeys() {
       try {
         const res = await fetch('/api/admin/list'); 
         const data = await res.json();
         if (data.length === 0) return alert('Chưa có Key nào để sao chép!');
         
+        // Nối các Key bằng dấu xuống dòng
         const allKeys = data.map(k => k.key_code).join('\\n');
         
         const textArea = document.createElement("textarea");
         textArea.value = allKeys;
-        textArea.style.position = "fixed"; textArea.style.left = "-9999px";
+        textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0";
         document.body.appendChild(textArea);
-        textArea.focus(); textArea.select();
+        textArea.focus(); 
+        textArea.select();
+        textArea.setSelectionRange(0, 99999); // Fix cho iOS
         document.execCommand('copy');
         textArea.remove();
 
-        alert('Đã sao chép toàn bộ ' + data.length + ' Key vào bộ nhớ tạm!');
+        alert('Đã sao chép toàn bộ ' + data.length + ' Key vào bộ nhớ tạm! Hãy dán ra để kiểm tra.');
       } catch(e) { alert('Lỗi tải dữ liệu!'); }
     }
 
