@@ -6,6 +6,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Lưu trữ Key trên RAM
 const dbKeys = {};
 let keyCounter = 1;
 
@@ -22,6 +23,7 @@ function generateKey() {
   return result;
 }
 
+// API lấy IP
 app.get('/api/whoami', (req, res) => {
   let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
@@ -29,30 +31,39 @@ app.get('/api/whoami', (req, res) => {
   res.json({ ip: ip || "127.0.0.1" });
 });
 
-app.post('/api/activate', (req, res) => {
-  const { key, device_name } = req.body;
+// API Xác thực Key cho App Alok
+app.post('/api/verify-key', (req, res) => {
+  const { key } = req.body;
   if (!dbKeys[key]) {
-    return res.json({ ok: false, message: 'Key không tồn tại.' });
+    return res.json({ ok: false, message: 'Key không tồn tại trên hệ thống.' });
   }
   const record = dbKeys[key];
   const now = Math.floor(Date.now() / 1000);
   if (record.expires_at && now > record.expires_at) {
     return res.json({ ok: false, message: 'Key đã hết hạn sử dụng.' });
   }
+  res.json({ ok: true, message: 'Xác thực thành công!' });
+});
+
+// API Kích hoạt (Dùng cho giao diện cũ của bạn nếu cần)
+app.post('/api/activate', (req, res) => {
+  const { key, device_name } = req.body;
+  if (!dbKeys[key]) return res.json({ ok: false, message: 'Key không tồn tại.' });
+  const record = dbKeys[key];
+  const now = Math.floor(Date.now() / 1000);
+  if (record.expires_at && now > record.expires_at) return res.json({ ok: false, message: 'Key đã hết hạn.' });
   record.device_name = device_name;
   res.json({ ok: true, message: 'Kích hoạt thành công!', expires_at: record.expires_at });
 });
 
-// ==========================================
-// TRANG ADMIN (GỘP CHUNG VÀO SERVER)
-// ==========================================
+// TRANG ADMIN QUẢN LÝ KEY
 app.get('/admin', (req, res) => {
   const html = `<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard</title>
+  <title>Admin Dashboard - SAMM X MODZ</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', sans-serif; background: #0f172a; color: #fff; padding: 20px; }
@@ -85,7 +96,7 @@ app.get('/admin', (req, res) => {
 </head>
 <body>
   <div class="container">
-    <h1>Quản Lý Key Hệ Thống</h1>
+    <h1>Quản Lý Key SAMM X MODZ</h1>
     <div class="create-card">
       <div class="input-group"><label>Ngày</label><input type="number" id="inputDays" value="30"></div>
       <div class="input-group"><label>Giờ</label><input type="number" id="inputHours" value="0"></div>
@@ -162,15 +173,14 @@ app.get('/admin', (req, res) => {
       } catch(e) { alert('Lỗi khi tạo Key'); }
     }
 
-    // Hàm copy 1 key (Đã tối ưu cho điện thoại)
     function copyKey(text, btn) {
       try {
         const textArea = document.createElement("textarea");
         textArea.value = text;
-        textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0";
+        textArea.style.position = "fixed"; textArea.style.left = "-9999px";
         document.body.appendChild(textArea);
         textArea.focus(); textArea.select();
-        textArea.setSelectionRange(0, 99999); // Fix cho iOS
+        textArea.setSelectionRange(0, 99999);
         document.execCommand('copy');
         textArea.remove();
 
@@ -184,27 +194,24 @@ app.get('/admin', (req, res) => {
       } catch (err) { alert('Lỗi khi sao chép!'); }
     }
 
-    // Hàm copy tất cả (Đã tối ưu cho điện thoại)
     async function copyAllKeys() {
       try {
         const res = await fetch('/api/admin/list'); 
         const data = await res.json();
         if (data.length === 0) return alert('Chưa có Key nào để sao chép!');
         
-        // Nối các Key bằng dấu xuống dòng
         const allKeys = data.map(k => k.key_code).join('\\n');
         
         const textArea = document.createElement("textarea");
         textArea.value = allKeys;
-        textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0";
+        textArea.style.position = "fixed"; textArea.style.left = "-9999px";
         document.body.appendChild(textArea);
-        textArea.focus(); 
-        textArea.select();
-        textArea.setSelectionRange(0, 99999); // Fix cho iOS
+        textArea.focus(); textArea.select();
+        textArea.setSelectionRange(0, 99999);
         document.execCommand('copy');
         textArea.remove();
 
-        alert('Đã sao chép toàn bộ ' + data.length + ' Key vào bộ nhớ tạm! Hãy dán ra để kiểm tra.');
+        alert('Đã sao chép toàn bộ ' + data.length + ' Key vào bộ nhớ tạm!');
       } catch(e) { alert('Lỗi tải dữ liệu!'); }
     }
 
@@ -215,9 +222,7 @@ app.get('/admin', (req, res) => {
   res.send(html);
 });
 
-// ==========================================
-// API LẤY DANH SÁCH & TẠO KEY
-// ==========================================
+// API Admin
 app.get('/api/admin/list', (req, res) => {
   const list = Object.keys(dbKeys).map(k => ({ key_code: k, ...dbKeys[k] }));
   list.sort((a, b) => b.id - a.id);
@@ -236,11 +241,11 @@ app.get('/api/admin/genkey', (req, res) => {
   let generatedKeys = [];
   for (let i = 0; i < qty; i++) {
     const newKey = generateKey();
-    dbKeys[newKey] = { id: keyCounter++, expires_at: exp, created_at: now, device_name: null };
+    dbKeys[newKey] = { id: keyCounter++, expires_at: exp, created_at: now };
     generatedKeys.push(newKey);
   }
   res.json({ ok: true, count: generatedKeys.length, keys: generatedKeys });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log('🚀 Server chạy thành công!'));
+app.listen(PORT, '0.0.0.0', () => console.log('🚀 Server App SAMM chạy thành công!'));
