@@ -1,11 +1,12 @@
 const express = require('express');
 const cors = require('cors');
-const app = express();
 
+const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Lưu trữ Key tạm thời trên RAM (Không dùng Database để tránh lỗi Render)
+// Lưu Key trên RAM
 const dbKeys = {};
 
 function generateKey() {
@@ -14,22 +15,45 @@ function generateKey() {
   return `KEY-${part()}-${part()}-${part()}`;
 }
 
-app.get('/whoami', (req, res) => {
+// API lấy IP
+app.get('/api/whoami', (req, res) => {
   let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
   if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7);
   res.json({ ip: ip || "127.0.0.1" });
 });
 
-app.post('/submit', (req, res) => {
-  const { key, ip } = req.body;
-  if (!dbKeys[key]) return res.status(404).json({ message: 'Key không tồn tại.' });
-  dbKeys[key].ip = ip;
-  res.json({ message: 'Kích hoạt thành công!', expires_at: dbKeys[key].expires_at, duration: '30 Ngày', aims: [], vip_gamevars: [] });
+// API Kích hoạt Key
+app.post('/api/activate', (req, res) => {
+  const { key, ip, device_id } = req.body;
+  if (!dbKeys[key]) return res.status(404).json({ ok: false, message: 'Key không tồn tại.' });
+  
+  const record = dbKeys[key];
+  const now = Math.floor(Date.now() / 1000);
+  if (record.expires_at && now > record.expires_at) return res.status(403).json({ ok: false, message: 'Key đã hết hạn.' });
+
+  record.ip = ip;
+  record.device_id = device_id;
+
+  res.json({
+    ok: true,
+    message: 'Kích hoạt thành công!',
+    expires_at: record.expires_at,
+    expiresAt: record.expires_at ? new Date(record.expires_at * 1000).toISOString() : null
+  });
+});
+
+// API Kiểm tra trạng thái
+app.post('/api/status', (req, res) => {
+  const { key, device_id } = req.body;
+  const record = dbKeys[key];
+  if (!record || !record.device_id) return res.json({ state: "none" });
+  if (record.device_id !== device_id) return res.json({ state: "active", device_conflict: true });
+  res.json({ state: "active", expires_at: record.expires_at, ip_matches: true });
 });
 
 // ==========================================
-// TRANG ADMIN
+// TRANG ADMIN (TẠO KEY)
 // ==========================================
 app.get('/admin', (req, res) => {
   res.send(`
@@ -99,7 +123,7 @@ app.get('/admin', (req, res) => {
         }
         async function createNewKey() {
           const d = document.getElementById('inputDays').value || 0, h = document.getElementById('inputHours').value || 0;
-          try { await fetch('/api/admin/genkey?days=' + d + '&hours=' + h); loadKeys(); } catch(e) { alert('Lỗi'); }
+          try { await fetch(`/api/admin/genkey?days=${d}&hours=${h}`); loadKeys(); } catch(e) { alert('Lỗi'); }
         }
         loadKeys();
       </script>
@@ -120,7 +144,7 @@ app.get('/api/admin/genkey', (req, res) => {
   const exp = total > 0 ? now + total : null;
   const newKey = generateKey();
   
-  dbKeys[newKey] = { expires_at: exp, created_at: now, ip: null };
+  dbKeys[newKey] = { expires_at: exp, created_at: now, ip: null, device_id: null };
   res.json({ ok: true, key: newKey });
 });
 
