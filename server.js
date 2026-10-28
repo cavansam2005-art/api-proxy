@@ -6,7 +6,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Lưu Key trên RAM
 const dbKeys = {};
 
 function generateKey() {
@@ -22,7 +21,6 @@ function generateKey() {
   return result;
 }
 
-// API lấy IP
 app.get('/api/whoami', (req, res) => {
   let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
@@ -30,7 +28,6 @@ app.get('/api/whoami', (req, res) => {
   res.json({ ip: ip || "127.0.0.1" });
 });
 
-// API Kích hoạt (Trả về Mã độ nhạy)
 app.post('/api/activate', (req, res) => {
   const { key } = req.body;
 
@@ -45,18 +42,35 @@ app.post('/api/activate', (req, res) => {
     return res.json({ ok: false, message: 'Key đã hết hạn.' });
   }
 
-  // ĐÂY LÀ MÃ ĐỘ NHẠY (Bạn có thể thay đổi mã này tùy ý)
-  const sensCode = "SENS-FREEFIRE-VIP-9999"; 
+  // Trả về thông số độ nhạy cho cả 2 nền tảng
+  const sensConfig = {
+    ios: {
+      general: "95",
+      redDot: "90",
+      scope2x: "85",
+      scope4x: "75",
+      sniper: "60",
+      freeLook: "99"
+    },
+    android: {
+      general: "98",
+      redDot: "95",
+      scope2x: "88",
+      scope4x: "80",
+      sniper: "65",
+      freeLook: "100"
+    },
+    dpi: "420"
+  };
 
   res.json({
     ok: true,
     message: 'Kích hoạt thành công!',
     expires_at: record.expires_at,
-    sens_code: sensCode
+    sens_config: sensConfig
   });
 });
 
-// Trang Admin
 app.get('/admin', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -144,7 +158,7 @@ app.get('/api/admin/genkey', (req, res) => {
   const exp = total > 0 ? now + total : null;
   const newKey = generateKey();
   
-  dbKeys[newKey] = { expires_at: exp, created_at: now, ip: null, device_id: null };
+  dbKeys[newKey] = { expires_at: exp, created_at: now };
   res.json({ ok: true, key: newKey });
 });
 
