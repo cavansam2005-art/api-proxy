@@ -6,9 +6,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Lưu Key trên RAM (kèm ID)
+// Lưu Key trên RAM
 const dbKeys = {};
-let keyCounter = 1; // Bộ đếm ID tự động
+let keyCounter = 1;
 
 // Hàm tạo Key ngẫu nhiên
 function generateKey() {
@@ -54,9 +54,7 @@ app.post('/api/activate', (req, res) => {
   });
 });
 
-// ==========================================
-// TRANG ADMIN (GIAO DIỆN NÂNG CẤP)
-// ==========================================
+// TRANG ADMIN
 app.get('/admin', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -148,7 +146,6 @@ app.get('/admin', (req, res) => {
       <div class="container">
         <h1>Quản Lý Key Hệ Thống</h1>
         
-        <!-- Form tạo Key -->
         <div class="create-card">
           <div class="input-group">
             <label>Thời hạn (Ngày)</label>
@@ -176,7 +173,6 @@ app.get('/admin', (req, res) => {
           </button>
         </div>
 
-        <!-- Bảng hiển thị Key -->
         <div class="table-card">
           <div class="table-header">
             <div style="font-weight: 600; font-size: 16px;">Danh sách Key</div>
@@ -260,7 +256,18 @@ app.get('/admin', (req, res) => {
 
         // Hàm copy 1 key
         function copyKey(text, btn) {
-          navigator.clipboard.writeText(text).then(() => {
+          try {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            textArea.remove();
+
             const oldText = btn.innerText;
             btn.innerText = 'Đã chép!';
             btn.style.background = 'var(--success)';
@@ -270,7 +277,9 @@ app.get('/admin', (req, res) => {
               btn.style.background = '';
               btn.style.color = '';
             }, 1500);
-          }).catch(() => alert('Lỗi khi sao chép!'));
+          } catch (err) {
+            alert('Lỗi khi sao chép!');
+          }
         }
 
         // Hàm copy tất cả key
@@ -280,11 +289,20 @@ app.get('/admin', (req, res) => {
             const data = await res.json();
             if (data.length === 0) return alert('Chưa có Key nào để sao chép!');
             
-            const allKeys = data.map(k => k.key_code).join('\\n');
+            const allKeys = data.map(k => k.key_code).join('\n');
             
-            navigator.clipboard.writeText(allKeys).then(() => {
-              alert(\`Đã sao chép toàn bộ \${data.length} Key vào bộ nhớ tạm!\`);
-            }).catch(() => alert('Lỗi khi sao chép!'));
+            const textArea = document.createElement("textarea");
+            textArea.value = allKeys;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            textArea.remove();
+
+            alert(\`Đã sao chép toàn bộ \${data.length} Key vào bộ nhớ tạm!\`);
           } catch(e) { alert('Lỗi tải dữ liệu!'); }
         }
 
@@ -301,11 +319,11 @@ app.get('/api/admin/list', (req, res) => {
   res.json(list);
 });
 
-// Cập nhật API tạo Key để hỗ trợ tạo hàng loạt (qty)
+// API tạo Key hỗ trợ tạo hàng loạt
 app.get('/api/admin/genkey', (req, res) => {
   const days = parseInt(req.query.days) || 0; 
   const hours = parseInt(req.query.hours) || 0;
-  const qty = parseInt(req.query.qty) || 1; // Số lượng key muốn tạo
+  const qty = parseInt(req.query.qty) || 1;
   
   const now = Math.floor(Date.now() / 1000); 
   const total = (days * 24 * 60 * 60) + (hours * 60 * 60);
