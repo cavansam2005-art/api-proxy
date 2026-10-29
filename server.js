@@ -4,14 +4,25 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Lưu trữ Key trên RAM
-const dbKeys = {};
+// Bộ nhớ lưu Key và Thiết bị
+const dbKeys = {}; // Lưu các key được tạo
+const dbDevices = {}; // Lưu thiết bị đã kích hoạt
 let keyCounter = 1;
 
+// Danh sách link TikTok giả lập (Bạn có thể sửa lại link thật ở đây)
+const tiktokLinks = {
+  "link_ruong_treo_1": { group: "-1003874158853", created_at: "14:20:00 29/10/2026", tt_id: "TikTok_User_1" },
+  "link_ruong_lon_1": { group: "-1002889993912", created_at: "14:15:00 29/10/2026", tt_id: "TikTok_User_2" },
+  "link_ruong_nho_1": { group: "-1003606511380", created_at: "14:10:00 29/10/2026", tt_id: "TikTok_User_3" },
+  "link_nhan_pham_1": { group: "-1002914600740", created_at: "14:05:00 29/10/2026", tt_id: "TikTok_User_4" },
+  "link_ruong_test_1": { group: "-1003393920142", created_at: "14:00:00 29/10/2026", tt_id: "TikTok_User_5" },
+  "link_tui_1": { group: "-1002601067327", created_at: "13:55:00 29/10/2026", tt_id: "TikTok_User_6" },
+  "link_tui_0xu_1": { group: "-1003337128065", created_at: "13:50:00 29/10/2026", tt_id: "TikTok_User_7" }
+};
+
 function generateKey() {
-  let result = 'KEY';
+  let result = 'VIP';
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   for (let i = 0; i < 3; i++) {
     let part = '';
@@ -23,205 +34,156 @@ function generateKey() {
   return result;
 }
 
-// API lấy IP
-app.get('/api/whoami', (req, res) => {
-  let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
-  if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7);
-  res.json({ ip: ip || "127.0.0.1" });
+// 1. API Kiểm tra quyền thiết bị
+app.get('/api/check-auth', (req, res) => {
+  const { device_id } = req.query;
+  if (!device_id) return res.status(400).json({ error: 'Thiếu device_id' });
+
+  const authData = dbDevices[device_id];
+  if (authData) {
+    res.json({
+      authorized: true,
+      device_tail: device_id.slice(-4),
+      key_tail: authData.key.slice(-4),
+      expires_at: authData.expires_at
+    });
+  } else {
+    res.json({ authorized: false });
+  }
 });
 
-// API Xác thực Key (Dành cho App gọi lên)
-app.post('/api/verify-key', (req, res) => {
-  const { key } = req.body;
-  if (!dbKeys[key]) {
-    return res.json({ ok: false, message: 'Key không tồn tại trên hệ thống.' });
-  }
-  const record = dbKeys[key];
+// 2. API Kích hoạt Key
+app.post('/api/activate-key', (req, res) => {
+  const { key, device_id } = req.body;
+  if (!key || !device_id) return res.status(400).json({ error: 'Thiếu thông tin' });
+
+  const keyData = dbKeys[key];
+  if (!keyData) return res.json({ success: false, error: 'Mã Key không chính xác!' });
+
   const now = Math.floor(Date.now() / 1000);
-  if (record.expires_at && now > record.expires_at) {
-    return res.json({ ok: false, message: 'Key đã hết hạn sử dụng.' });
+  if (keyData.expires_at && now > keyData.expires_at) {
+    return res.json({ success: false, error: 'Mã Key đã hết hạn!' });
   }
-  res.json({ ok: true, message: 'Xác thực thành công!' });
+
+  // Lưu thiết bị đã kích hoạt
+  dbDevices[device_id] = {
+    key: key,
+    expires_at: keyData.expires_at
+  };
+
+  res.json({ success: true, message: 'Kích hoạt thành công!' });
 });
 
-// API Kích hoạt (Dùng cho giao diện cũ)
-app.post('/api/activate', (req, res) => {
-  const { key, device_name } = req.body;
-  if (!dbKeys[key]) return res.json({ ok: false, message: 'Key không tồn tại.' });
-  const record = dbKeys[key];
-  const now = Math.floor(Date.now() / 1000);
-  if (record.expires_at && now > record.expires_at) return res.json({ ok: false, message: 'Key đã hết hạn.' });
-  record.device_name = device_name;
-  res.json({ ok: true, message: 'Kích hoạt thành công!', expires_at: record.expires_at });
+// 3. API Lấy danh sách link
+app.post('/api/v2/feed/stream', (req, res) => {
+  const { device_id } = req.body;
+  if (!dbDevices[device_id]) {
+    return res.status(403).json({ error: 'Chưa kích hoạt' });
+  }
+
+  // Tạo thông tin số lượng link cho từng nhóm
+  const groupCounts = {};
+  for (const key in tiktokLinks) {
+    const group = tiktokLinks[key].group;
+    groupCounts[group] = (groupCounts[group] || 0) + 1;
+  }
+
+  res.json({
+    success: true,
+    groupCounts: groupCounts,
+    channels: {}, 
+    links: tiktokLinks
+  });
+});
+
+// 4. API Chuyển hướng khi bấm "Mở Link"
+app.post('/api/v2/feed/claim-link', (req, res) => {
+  const { shop_id } = req.body;
+  // Trả về link TikTok mẫu (Bạn có thể sửa lại link thật)
+  res.json({ url: "https://www.tiktok.com/@tiktok/live" });
 });
 
 // ==========================================
-// TRANG ADMIN QUẢN LÝ KEY
+// TRANG ADMIN TẠO KEY
 // ==========================================
 app.get('/admin', (req, res) => {
-  const html = `<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard - SAMM X MODZ</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Inter', sans-serif; background: #0f172a; color: #fff; padding: 20px; }
-    .container { max-width: 1000px; margin: 0 auto; }
-    h1 { color: #38bdf8; text-align: center; }
-    .create-card { background: #1e293b; padding: 20px; border-radius: 12px; display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20px; }
-    .input-group { display: flex; flex-direction: column; gap: 5px; }
-    .input-group label { font-size: 13px; color: #94a3b8; }
-    .input-group input { padding: 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; width: 100px; outline: none; }
-    .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
-    .btn { padding: 10px 15px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: 0.2s;}
-    .btn:active { transform: scale(0.96); }
-    .btn-outline { background: transparent; border: 1px solid #334155; color: #fff; }
-    .btn-primary { background: #10b981; color: #fff; font-size: 15px; padding: 12px 24px;}
-    .btn-copy { background: #38bdf8; color: #fff; }
-    .table-card { background: #1e293b; border-radius: 12px; overflow: hidden; }
-    .table-header { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #334155; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 15px; border-bottom: 1px solid #334155; text-align: left; font-size: 14px; }
-    th { color: #94a3b8; background: rgba(255,255,255,0.02); }
-    .key-code { font-family: monospace; color: #fbbf24; font-weight: 700; font-size: 15px; }
-    .id-badge { background: #334155; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; }
-    @media(max-width: 600px) { 
-      .create-card { flex-direction: column; align-items: stretch; } 
-      .input-group input { width: 100%; } 
-      .btn-group { flex-direction: column; width: 100%; } 
-      .btn { width: 100%; } 
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>Quản Lý Key SAMM X MODZ</h1>
-    <div class="create-card">
-      <div class="input-group"><label>Ngày</label><input type="number" id="inputDays" value="30"></div>
-      <div class="input-group"><label>Giờ</label><input type="number" id="inputHours" value="0"></div>
-      <div class="input-group"><label>Số lượng</label><input type="number" id="inputQty" value="1" style="border-color: #10b981;"></div>
-      <div class="btn-group" style="margin-right: auto;">
-        <button class="btn btn-outline" onclick="setTime(1,0)">1 Ngày</button>
-        <button class="btn btn-outline" onclick="setTime(7,0)">7 Ngày</button>
-        <button class="btn btn-outline" onclick="setTime(30,0)">30 Ngày</button>
-        <button class="btn btn-outline" onclick="setTime(0,0)">Vĩnh viễn</button>
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Admin - ShopLink</title>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+      <style>
+        body { font-family: 'Inter', sans-serif; background: #0a0a0c; color: #fff; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { color: #25f4ee; text-align: center; }
+        .create-box { background: #121216; padding: 20px; border-radius: 12px; display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20px; border: 1px solid #fe2c55; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        .input-group label { font-size: 13px; color: #94a3b8; }
+        .input-group input { padding: 10px; border-radius: 8px; border: 1px solid #333; background: #0a0a0c; color: #fff; width: 100px; outline: none; }
+        .btn { padding: 10px 15px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+        .btn-green { background: #10b981; color: #fff; font-size: 15px; padding: 12px 24px;}
+        .btn-copy { background: #25f4ee; color: #000; }
+        table { width: 100%; border-collapse: collapse; background: #121216; border-radius: 10px; overflow: hidden; border: 1px solid #333; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #333; font-size: 13px; }
+        th { background: #1a1a20; color: #94a3b8; }
+        .key-code { font-family: monospace; color: #ff7a00; font-weight: 700; font-size: 15px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>Quản Lý Key ShopLink</h1>
+        <div class="create-box">
+          <div class="input-group"><label>Ngày</label><input type="number" id="inputDays" value="30"></div>
+          <div class="input-group"><label>Giờ</label><input type="number" id="inputHours" value="0"></div>
+          <div class="input-group"><label>Số lượng</label><input type="number" id="inputQty" value="1"></div>
+          <button class="btn btn-green" onclick="createNewKey()">+ Tạo Key</button>
+        </div>
+        <table>
+          <thead><tr><th>ID</th><th>Key Code</th><th>Hạn Sử Dụng</th><th>Hành động</th></tr></thead>
+          <tbody id="keyTableBody"><tr><td colspan="4" style="text-align:center;">Đang tải...</td></tr></tbody>
+        </table>
       </div>
-      <button class="btn btn-primary" onclick="createNewKey()">+ Tạo Key</button>
-    </div>
-
-    <div class="table-card">
-      <div class="table-header">
-        <div style="font-weight:600;">Danh sách Key</div>
-        <button class="btn btn-copy" onclick="copyAllKeys()">📋 Sao chép tất cả</button>
-      </div>
-      <table>
-        <thead><tr><th>ID</th><th>Key Code</th><th>Hạn Sử Dụng</th><th>Hành động</th></tr></thead>
-        <tbody id="keyTableBody">
-          <tr><td colspan="4" style="text-align:center;">Đang tải dữ liệu...</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <script>
-    function setTime(d, h) { 
-      document.getElementById('inputDays').value = d; 
-      document.getElementById('inputHours').value = h; 
-    }
-
-    async function loadKeys() {
-      try {
-        const res = await fetch('/api/admin/list'); 
-        const data = await res.json();
-        const tbody = document.getElementById('keyTableBody');
-        
-        if (data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">Chưa có Key nào được tạo.</td></tr>';
-          return;
+      <script>
+        async function loadKeys() {
+          const res = await fetch('/api/admin/list');
+          const data = await res.json();
+          const tbody = document.getElementById('keyTableBody');
+          if (data.length === 0) return tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Chưa có key.</td></tr>';
+          
+          const now = Math.floor(Date.now() / 1000);
+          tbody.innerHTML = data.map(k => {
+            let e = 'Vĩnh viễn';
+            if (k.expires_at) { e = new Date(k.expires_at * 1000).toLocaleString('vi-VN'); }
+            return \`<tr>
+              <td>#\${k.id}</td>
+              <td class="key-code">\${k.key_code}</td>
+              <td>\${e}</td>
+              <td><button class="btn btn-copy" onclick="copyKey('\${k.key_code}', this)">Sao chép</button></td>
+            </tr>\`;
+          }).join('');
         }
-        
-        const now = Math.floor(Date.now() / 1000);
-        
-        tbody.innerHTML = data.map(k => {
-          let expiresStr = 'Vĩnh viễn';
-          if (k.expires_at) { 
-            expiresStr = new Date(k.expires_at * 1000).toLocaleString('vi-VN'); 
-          }
-          return '<tr>' +
-            '<td><span class="id-badge">#' + k.id + '</span></td>' +
-            '<td class="key-code">' + k.key_code + '</td>' +
-            '<td>' + expiresStr + '</td>' +
-            '<td><button class="btn btn-outline" onclick="copyKey(\\'' + k.key_code + '\\', this)">Sao chép</button></td>' +
-          '</tr>';
-        }).join('');
-      } catch(e) { 
-        document.getElementById('keyTableBody').innerHTML = '<tr><td colspan="4" style="color:red; text-align:center;">Lỗi tải dữ liệu</td></tr>'; 
-      }
-    }
-
-    async function createNewKey() {
-      const d = parseInt(document.getElementById('inputDays').value) || 0;
-      const h = parseInt(document.getElementById('inputHours').value) || 0;
-      const q = parseInt(document.getElementById('inputQty').value) || 1;
-
-      if(q < 1 || q > 100) return alert('Số lượng Key phải từ 1 đến 100.');
-
-      try { 
-        await fetch('/api/admin/genkey?days=' + d + '&hours=' + h + '&qty=' + q); 
-        loadKeys(); 
-      } catch(e) { alert('Lỗi khi tạo Key'); }
-    }
-
-    function copyKey(text, btn) {
-      try {
-        const textArea = document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.position = "fixed"; textArea.style.left = "-9999px";
-        document.body.appendChild(textArea);
-        textArea.focus(); textArea.select();
-        textArea.setSelectionRange(0, 99999);
-        document.execCommand('copy');
-        textArea.remove();
-
-        const oldText = btn.innerText;
-        btn.innerText = 'Đã chép!';
-        btn.style.background = '#10b981'; btn.style.color = '#fff'; btn.style.borderColor = '#10b981';
-        setTimeout(() => {
-          btn.innerText = oldText;
-          btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = '';
-        }, 1500);
-      } catch (err) { alert('Lỗi khi sao chép!'); }
-    }
-
-    async function copyAllKeys() {
-      try {
-        const res = await fetch('/api/admin/list'); 
-        const data = await res.json();
-        if (data.length === 0) return alert('Chưa có Key nào để sao chép!');
-        
-        const allKeys = data.map(k => k.key_code).join('\\n');
-        
-        const textArea = document.createElement("textarea");
-        textArea.value = allKeys;
-        textArea.style.position = "fixed"; textArea.style.left = "-9999px";
-        document.body.appendChild(textArea);
-        textArea.focus(); textArea.select();
-        textArea.setSelectionRange(0, 99999);
-        document.execCommand('copy');
-        textArea.remove();
-
-        alert('Đã sao chép toàn bộ ' + data.length + ' Key vào bộ nhớ tạm!');
-      } catch(e) { alert('Lỗi tải dữ liệu!'); }
-    }
-
-    loadKeys();
-  </script>
-</body>
-</html>`;
-  res.send(html);
+        async function createNewKey() {
+          const d = document.getElementById('inputDays').value || 0;
+          const h = document.getElementById('inputHours').value || 0;
+          const q = document.getElementById('inputQty').value || 1;
+          await fetch(\`/api/admin/genkey?days=\${d}&hours=\${h}&qty=\${q}\`);
+          loadKeys();
+        }
+        function copyKey(text, btn) {
+          navigator.clipboard.writeText(text).then(() => {
+            btn.innerText = 'Đã chép!';
+            btn.style.background = '#10b981'; btn.style.color = '#fff';
+            setTimeout(() => { btn.innerText = 'Sao chép'; btn.style.background = '#25f4ee'; btn.style.color = '#000'; }, 1500);
+          });
+        }
+        loadKeys();
+      </script>
+    </body>
+    </html>
+  `);
 });
 
 // API Admin
@@ -250,4 +212,4 @@ app.get('/api/admin/genkey', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log('🚀 Server App SAMM chạy thành công!'));
+app.listen(PORT, '0.0.0.0', () => console.log('🚀 ShopLink Server chạy thành công!'));
