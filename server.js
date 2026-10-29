@@ -9,45 +9,45 @@ const dbKeys = {};
 const dbDevices = {};
 let keyCounter = 1;
 
-// ==========================================
-// BẠN SỬA LINK THẬT CỦA NGƯỜI BÁN VÀO ĐÂY
-// Lưu ý: Link phải là link Live hoặc link Profile của họ
-// ==========================================
+// ==========================================================
+// ⚠️ SỬA LINK TIKTOK THẬT CỦA BẠN VÀO ĐÂY
+// Mỗi tab một link khác nhau (link live hoặc link profile)
+// ==========================================================
 const tiktokLinks = {
   "link_ruong_treo_1": { 
       group: "ruong_treo", 
       created_at: "14:20:00 29/10/2026", 
-      real_url: "https://www.tiktok.com/@ten_nguoi_ban/live" // Sửa link này
+      real_url: "https://www.tiktok.com/@link_ruong_treo/live" 
   },
   "link_ruong_lon_1": { 
       group: "ruong_lon", 
       created_at: "14:15:00 29/10/2026", 
-      real_url: "https://www.tiktok.com/@ten_nguoi_ban/live" // Sửa link này
+      real_url: "https://www.tiktok.com/@link_ruong_lon/live" 
   },
   "link_ruong_nho_1": { 
       group: "ruong_nho", 
       created_at: "14:10:00 29/10/2026", 
-      real_url: "https://www.tiktok.com/@ten_nguoi_ban/live" // Sửa link này
+      real_url: "https://www.tiktok.com/@link_ruong_nho/live" 
   },
   "link_nhan_pham_1": { 
       group: "nhan_pham", 
       created_at: "14:05:00 29/10/2026", 
-      real_url: "https://www.tiktok.com/@ten_nguoi_ban/live" // Sửa link này
+      real_url: "https://www.tiktok.com/@link_nhan_pham/live" 
   },
   "link_ruong_test_1": { 
       group: "ruong_test", 
       created_at: "14:00:00 29/10/2026", 
-      real_url: "https://www.tiktok.com/@ten_nguoi_ban/live" // Sửa link này
+      real_url: "https://www.tiktok.com/@link_ruong_test/live" 
   },
   "link_tui_1": { 
       group: "tui", 
       created_at: "13:55:00 29/10/2026", 
-      real_url: "https://www.tiktok.com/@ten_nguoi_ban/live" // Sửa link này
+      real_url: "https://www.tiktok.com/@link_tui/live" 
   },
   "link_tui_0xu_1": { 
       group: "tui_0xu", 
       created_at: "13:50:00 29/10/2026", 
-      real_url: "https://www.tiktok.com/@ten_nguoi_ban/live" // Sửa link này
+      real_url: "https://www.tiktok.com/@link_tui_0xu/live" 
   }
 };
 
@@ -123,13 +123,13 @@ app.post('/api/v2/feed/stream', (req, res) => {
   });
 });
 
-// 4. API Chuyển hướng (Đã sửa để trả về link thật)
+// 4. API Chuyển hướng
 app.post('/api/v2/feed/claim-link', (req, res) => {
   const { shop_id } = req.body;
   const linkData = tiktokLinks[shop_id];
   
   if (linkData && linkData.real_url) {
-    res.json({ url: linkData.real_url }); // Trả về link thật
+    res.json({ url: linkData.real_url });
   } else {
     res.status(404).json({ error: 'Không tìm thấy link' });
   }
