@@ -9,9 +9,15 @@ const dbKeys = {};
 const dbDevices = {};
 let keyCounter = 1;
 
+// Danh sách link (Bạn có thể thêm nhiều link vào đây)
 const tiktokLinks = {
-  "link_ruong_treo_1": { group: "-1003874158853", created_at: "14:20:00 29/10/2026", tt_id: "TikTok_User_1" },
-  "link_ruong_lon_1": { group: "-1002889993912", created_at: "14:15:00 29/10/2026", tt_id: "TikTok_User_2" }
+  "link_ruong_treo_1": { group: "ruong_treo", created_at: "14:20:00 29/10/2026", tt_id: "TikTok_User_1" },
+  "link_ruong_lon_1": { group: "ruong_lon", created_at: "14:15:00 29/10/2026", tt_id: "TikTok_User_2" },
+  "link_ruong_nho_1": { group: "ruong_nho", created_at: "14:10:00 29/10/2026", tt_id: "TikTok_User_3" },
+  "link_nhan_pham_1": { group: "nhan_pham", created_at: "14:05:00 29/10/2026", tt_id: "TikTok_User_4" },
+  "link_ruong_test_1": { group: "ruong_test", created_at: "14:00:00 29/10/2026", tt_id: "TikTok_User_5" },
+  "link_tui_1": { group: "tui", created_at: "13:55:00 29/10/2026", tt_id: "TikTok_User_6" },
+  "link_tui_0xu_1": { group: "tui_0xu", created_at: "13:50:00 29/10/2026", tt_id: "TikTok_User_7" }
 };
 
 function generateKey() {
@@ -27,7 +33,7 @@ function generateKey() {
   return result;
 }
 
-// 1. API Kiểm tra quyền thiết bị
+// 1. API Check Auth
 app.get('/api/check-auth', (req, res) => {
   const { device_id } = req.query;
   if (!device_id) return res.status(400).json({ error: 'Thiếu device_id' });
@@ -86,13 +92,13 @@ app.post('/api/v2/feed/stream', (req, res) => {
   });
 });
 
-// 4. API Chuyển hướng khi bấm "Mở Link"
+// 4. API Chuyển hướng
 app.post('/api/v2/feed/claim-link', (req, res) => {
   res.json({ url: "https://www.tiktok.com/@tiktok/live" });
 });
 
 // ==========================================
-// TRANG ADMIN TẠO KEY & CẤP QUYỀN THIẾT BỊ
+// TRANG ADMIN
 // ==========================================
 app.get('/admin', (req, res) => {
   res.send(`
@@ -133,7 +139,6 @@ app.get('/admin', (req, res) => {
           <button class="tab-btn" onclick="switchTab('device')">Cấp Quyền Thiết Bị</button>
         </div>
 
-        <!-- Tab Tạo Key -->
         <div id="tab-key" class="create-box active">
           <div class="input-group"><label>Ngày</label><input type="number" id="inputDays" value="30"></div>
           <div class="input-group"><label>Giờ</label><input type="number" id="inputHours" value="0"></div>
@@ -141,10 +146,9 @@ app.get('/admin', (req, res) => {
           <button class="btn btn-green" onclick="createNewKey()">+ Tạo Key</button>
         </div>
 
-        <!-- Tab Cấp Quyền Thiết Bị -->
         <div id="tab-device" class="create-box">
           <div class="input-group" style="flex:1;">
-            <label>Nhập ID Thiết Bị (VD: device_abc123...)</label>
+            <label>Nhập ID Thiết Bị</label>
             <input type="text" id="inputDeviceId" placeholder="device_..." style="width:100%;">
           </div>
           <div class="input-group"><label>Ngày</label><input type="number" id="inputDevDays" value="30"></div>
@@ -176,12 +180,7 @@ app.get('/admin', (req, res) => {
             tbody.innerHTML = data.map(k => {
               let e = 'Vĩnh viễn';
               if (k.expires_at) { e = new Date(k.expires_at * 1000).toLocaleString('vi-VN'); }
-              return \`<tr>
-                <td>#\${k.id}</td>
-                <td class="key-code">\${k.key_code}</td>
-                <td>\${e}</td>
-                <td><button class="btn btn-copy" onclick="copyText('\${k.key_code}', this)">Sao chép</button></td>
-              </tr>\`;
+              return \`<tr><td>#\${k.id}</td><td class="key-code">\${k.key_code}</td><td>\${e}</td><td><button class="btn btn-copy" onclick="copyText('\${k.key_code}', this)">Sao chép</button></td></tr>\`;
             }).join('');
           } else {
             const res = await fetch('/api/admin/devices');
@@ -190,12 +189,7 @@ app.get('/admin', (req, res) => {
             tbody.innerHTML = data.map(d => {
               let e = 'Vĩnh viễn';
               if (d.expires_at) { e = new Date(d.expires_at * 1000).toLocaleString('vi-VN'); }
-              return \`<tr>
-                <td>Device</td>
-                <td class="key-code" style="font-size:12px;">\${d.device_id}</td>
-                <td>\${e}</td>
-                <td><button class="btn btn-copy" onclick="copyText('\${d.device_id}', this)">Sao chép</button></td>
-              </tr>\`;
+              return \`<tr><td>Device</td><td class="key-code" style="font-size:12px;">\${d.device_id}</td><td>\${e}</td><td><button class="btn btn-copy" onclick="copyText('\${d.device_id}', this)">Sao chép</button></td></tr>\`;
             }).join('');
           }
         }
@@ -212,12 +206,7 @@ app.get('/admin', (req, res) => {
           const devId = document.getElementById('inputDeviceId').value.trim();
           const d = document.getElementById('inputDevDays').value || 30;
           if (!devId) return alert('Vui lòng nhập ID thiết bị!');
-          
-          await fetch('/api/admin/add-device', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ device_id: devId, days: parseInt(d) })
-          });
+          await fetch('/api/admin/add-device', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ device_id: devId, days: parseInt(d) }) });
           document.getElementById('inputDeviceId').value = '';
           loadData();
         }
@@ -260,7 +249,6 @@ app.get('/api/admin/genkey', (req, res) => {
   const days = parseInt(req.query.days) || 0; 
   const hours = parseInt(req.query.hours) || 0;
   const qty = parseInt(req.query.qty) || 1;
-  
   const now = Math.floor(Date.now() / 1000); 
   const total = (days * 24 * 60 * 60) + (hours * 60 * 60);
   const exp = total > 0 ? now + total : null;
